@@ -25,8 +25,13 @@ ENV NODE_ENV=production
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm ci
+# 1. On copie d'abord tout le code (y compris package-lock.json)
 COPY . .
+
+# 2. Ensuite on lance l'installation propre
+RUN npm ci
+
+# 3. Enfin on compile
 RUN npm run build
 
 # ==========================================
