@@ -1,0 +1,87 @@
+version: '3.8'
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: my_database_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backend-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: mon-registry.azurecr.io/my-backend:latest
+    container_name: my_backend_prod
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@database:5432/${DB_NAME}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - frontend-net
+      - backend-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+frontend:
+    image: mon-registry.azurecr.io/my-frontend:latest
+    container_name: my_frontend_prod
+    restart: always
+    read_only: true              # Rend tout le système de fichiers racine en lecture seule
+    cap_drop:
+      - ALL                      # Retire absolument TOUTES les capacités du noyau Linux par défaut
+    cap_add:
+      - NET_BIND_SERVICE         # Nécessaire pour autoriser Nginx à écouter sur le port 80 (port < 1024)
+      - CHOWN                    # Nécessaire pour que Nginx puisse ajuster les permissions de ses fichiers
+      - SETUID
+      - SETGID
+    volumes:
+      - /usr/share/nginx/html    # (Optionnel si les assets sont déjà dans l'image, mais utile si montés)
+      - /var/cache/nginx         # Dossier de cache Nginx transformé en stockage temporaire
+      - /var/run                 # Nécessaire pour stocker le fichier nginx.pid
+      - /var/log/nginx           # Pour que Nginx puisse écrire ses logs (ou redirigé vers stdout)
+    tmpfs:
+      - /tmp                     # Dossier temporaire en RAM
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - frontend-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
