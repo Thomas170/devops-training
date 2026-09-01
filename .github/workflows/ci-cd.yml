@@ -68,7 +68,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      # Étape indispensable pour builder des images multi-architectures ou utiliser le cache de build Docker
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
