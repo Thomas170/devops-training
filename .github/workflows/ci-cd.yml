@@ -23,6 +23,10 @@ jobs:
         run: npm ci
         working-directory: ./frontend
 
+      - name: Run Linter
+        run: npm run lint
+        working-directory: ./frontend
+
       - name: Run Frontend Tests
         run: npm test
         working-directory: ./frontend
@@ -45,6 +49,74 @@ jobs:
         run: npm ci
         working-directory: ./backend
 
+      - name: Run Linter
+        run: npm run lint
+        working-directory: ./backend
+
       - name: Run Backend Tests
         run: npm test
         working-directory: ./backend
+
+  build-and-push:
+    needs: [quality-and-test-frontend, quality-and-test-backend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Étape indispensable pour builder des images multi-architectures ou utiliser le cache de build Docker
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- BACKEND : METADATA & BUILD/PUSH ---
+      - name: Extract Metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- FRONTEND : METADATA & BUILD/PUSH ---
+      - name: Extract Metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/frontend
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
