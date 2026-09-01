@@ -29,7 +29,7 @@ ENV VITE_API_URL=$VITE_API_URL
 COPY . .
 
 # 2. Ensuite on lance l'installation propre
-RUN npm install
+RUN npm install --include=dev
 
 # 3. Enfin on compile
 RUN npm run build
